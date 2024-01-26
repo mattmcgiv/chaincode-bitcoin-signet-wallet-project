@@ -1,11 +1,20 @@
+from conversion_utils import parse256
+from ec_utils import point
+from ecdsa import SigningKey, SECP256k1
 from decimal import Decimal
 from decode_utils import base58_decode_and_remove_checksum
-from ecdsa import SigningKey, SECP256k1
-from key_utils import deserialize_key
-from solution_constants import WALLET_DESCRIPTOR, WPKH, TPRV, DERIVATION_PATH
+from key_utils import deserialize_key, derive_compressed_pubkey_from_privkey
+from serialization_utils import ser32, ser256, serP
+from solution_constants import (
+    WALLET_DESCRIPTOR,
+    WPKH,
+    TPRV,
+    DERIVATION_PATH,
+    EXTENDED_PRIVATE_KEY,
+)
 from subprocess import run
 from typing import List, Tuple
-from wallet_utils import parse_derivation_path
+from wallet_utils import parse_derivation_path, hash160
 import hashlib
 import hmac
 import json
@@ -13,49 +22,103 @@ import json
 # Provided by administrator
 WALLET_NAME = "wallet_000"
 
-# Derive the secp256k1 compressed public key from a given private key
-# BONUS POINTS: Implement ECDSA yourself and multiply you key by the generator point!
-def get_pub_from_priv(priv: bytes) -> bytes:
-
 
 # Perform a BIP32 parent private key -> child private key operation
 # Return a JSON object with "key" and "chaincode" properties as bytes
 # https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki#user-content-Private_parent_key_rarr_private_child_key
-def derive_priv_child(key: bytes, chaincode: bytes, index: int, hardened: bool) -> object:
-#TODO: once deserialize_key is done, implement this method to use in get_wallet_privs()
+def derive_priv_child(
+    key: bytes, chaincode: bytes, index: int, hardened: bool
+) -> object:
+    result = {
+        "key": None,
+        "chaincode": None,
+    }
+    I = None
 
+    # hardened child
+    if hardened:
+        # let I = HMAC-SHA512(Key = cpar, Data = 0x00 || ser256(kpar) || ser32(i)).
+        # (Note: The 0x00 pads the private key to make it 33 bytes long.)
+        # ser256(p): serializes the integer p as a 32-byte sequence, most significant byte first.
+        # ser32(i): serialize a 32-bit unsigned integer i as a 4-byte sequence, most significant byte first.
+        I = hmac.new(
+            chaincode,
+            b"\x00" + key + index.to_bytes(4, byteorder="big"),
+            hashlib.sha512,
+        ).digest()
+
+    else:
+        # non-hardened child
+        # let I = HMAC-SHA512(Key = cpar, Data = serP(point(kpar)) || ser32(i)).
+        # ser32(i): serialize a 32-bit unsigned integer i as a 4-byte sequence, most significant byte first.
+        # serP(P): serializes the coordinate pair P = (x,y) as a byte sequence using SEC1's compressed form: (0x02 or 0x03) || ser256(x), where the header byte depends on the parity of the omitted y coordinate.
+        # point(p): returns the coordinate pair resulting from EC point multiplication (repeated application of the EC group operation) of the secp256k1 base point with the integer p.
+        I = hmac.new(
+            chaincode, (serP(point(key)) + ser32(index)), digestmod=hashlib.sha256
+        ).digest()
+
+    # Split I into two 32-byte sequences, IL and IR.
+    I_L = I[:32]
+    I_R = I[32:]
+    # The returned child key ki is parse256(IL) + kpar (mod n).
+    # parse256(p): interprets a 32-byte sequence as a 256-bit number, most significant byte first.
+    # kpar_mod_n = int.from_bytes(key, byteorder="big")
+    k_i = (parse256(I_L) + int.from_bytes(key, byteorder="big")) % SECP256k1.order
+    # The returned chain code ci is IR.
+    c_i = I_R
+    result = {
+        "key": k_i.to_bytes(32, byteorder="big"),
+        "chaincode": c_i,
+    }
+    return result
 
 
 # Given an extended private key and a BIP32 derivation path,
 # compute the first 2000 child private keys.
 # Return an array of keys encoded as bytes.
 # The derivation path is formatted as an array of (index: int, hardened: bool) tuples.
-def get_wallet_privs(key: bytes, chaincode: bytes, path: List[Tuple[int, bool]]) -> List[bytes]:
+def get_wallet_privs(
+    key: bytes, chaincode: bytes, path: List[Tuple[int, bool]]
+) -> List[bytes]:
     privs = []
-    # get the 85th hardened child private key from the key param
-    key_1 = derive_priv_child(key, chaincode, path[0][0], path[0][1])
 
-    # use key_1 to get the second hardened child private key
-    key_2 = derive_priv_child(key_1["key"], key_1["chaincode"], path[1][0], path[1][1])
+    # Check if both key and chaincode are bytes
+    if not isinstance(key, bytes):
+        raise TypeError("key must be bytes.")
 
-    # use key_2 to get the first hardened child private key
-    key_3 = derive_priv_child(key_2["key"], key_2["chaincode"], path[2][0], path[2][1])
+    if not isinstance(chaincode, bytes):
+        raise TypeError("chaincode must be bytes.")
 
-    # use key_3 to get the first child private key
-    key_4 = derive_priv_child(key_3["key"], key_3["chaincode"], path[3][0], path[3][1])
+    current_key = key
+    current_chaincode = chaincode
+    for i in range(len(path)):
+        if not isinstance(path[i][0], int):
+            raise TypeError("index must be int.")
+
+        if not isinstance(path[i][1], bool):
+            raise TypeError("hardened must be bool.")
+
+        priv_child = derive_priv_child(
+            current_key, current_chaincode, path[i][0], path[i][1]
+        )
+        current_key = priv_child["key"]
+        current_chaincode = priv_child["chaincode"]
 
     # use key_4 to derive 2000 keys and append them to privs
     for i in range(2000):
-        privs.append(derive_priv_child(key_4["key"], key_4["chaincode"], i, False)["key"])
+        derived_priv_child = derive_priv_child(current_key, current_key, i, False)
+        privs.append(derived_priv_child["key"])
 
     return privs
+
 
 # Derive the p2wpkh witness program (aka scriptPubKey) for a given compressed public key.
 # Return a bytes array to be compared with the JSON output of Bitcoin Core RPC getblock
 # so we can find our received transactions in blocks.
 # These are segwit version 0 pay-to-public-key-hash witness programs.
 # https://github.com/bitcoin/bips/blob/master/bip-0141.mediawiki#user-content-P2WPKH
-def get_p2wpkh_program(pubkey: bytes, version: int=0) -> bytes:
+def get_p2wpkh_program(pubkey: bytes, version: int = 0) -> bytes:
+    return version.to_bytes(1, byteorder="big") + b"\x14" + hash160(pubkey)
 
 
 # Assuming Bitcoin Core is running and connected to signet using default datadir,
@@ -65,9 +128,10 @@ def get_p2wpkh_program(pubkey: bytes, version: int=0) -> bytes:
 #           bcli("getblockhash 100")
 def bcli(cmd: str):
     res = run(
-            ["bitcoin-cli", "-signet"] + cmd.split(" "),
-            capture_output=True,
-            encoding="utf-8")
+        ["bitcoin-cli", "-signet"] + cmd.split(" "),
+        capture_output=True,
+        encoding="utf-8",
+    )
     if res.returncode == 0:
         return res.stdout.strip()
     else:
@@ -81,13 +145,31 @@ def bcli(cmd: str):
 def recover_wallet_state(xprv: str):
     # Generate all the keypairs and witness programs to search foraa
     deserialized_key = deserialize_key(xprv)
+
+    decoded_key = base58_decode_and_remove_checksum(deserialized_key["key"])
+    decoded_chaincode = base58_decode_and_remove_checksum(deserialized_key["chaincode"])
+
+    # Check if both key and chaincode are bytes
+    if not isinstance(decoded_key, bytes):
+        raise TypeError("key must be bytes.")
+
+    if not isinstance(decoded_chaincode, bytes):
+        raise TypeError("chaincode must be bytes.")
+
     privs = get_wallet_privs(
-        deserialized_key["key"],
-        deserialized_key["chaincode"],
-        parse_derivation_path(DERIVATION_PATH)
+        decoded_key,
+        decoded_chaincode,
+        parse_derivation_path(DERIVATION_PATH),
     )
-    pubs = 
-    programs = 
+    # get the public keys from the privs
+    pubs = []
+    for priv in privs:
+        pubs.append(derive_compressed_pubkey_from_privkey(priv))
+
+    # get the witness programs from the pubs
+    programs = []
+    for pub in pubs:
+        programs.append(get_p2wpkh_program(pub))
 
     # Prepare a wallet state data structure
     state = {
@@ -95,28 +177,33 @@ def recover_wallet_state(xprv: str):
         "balance": 0,
         "privs": privs,
         "pubs": pubs,
-        "programs": programs
+        "programs": programs,
     }
 
-    # Scan blocks 0-310
-    height = 310
-    for h in range(height + 1):
+    # pretty print state to a file
+    # with open("state.json", "w") as f:
+    #     json.dump(state, f, indent=4)
+    #     f.close()
 
-        # Scan every tx in every block
-        for tx in txs:
-            # Check every tx input (witness) for our own compressed public keys.
-            # These are coins we have spent.
-            for inp in tx["vin"]:
+    # # Scan blocks 0-310
+    # height = 310
+    # for h in range(height + 1):
 
-                    # Remove this coin from our wallet state utxo pool
-                    # so we don't double spend it later
+    #     # Scan every tx in every block
+    #     for tx in txs:
+    #         # Check every tx input (witness) for our own compressed public keys.
+    #         # These are coins we have spent.
+    #         for inp in tx["vin"]:
 
-            # Check every tx output for our own witness programs.
-            # These are coins we have received.
-            for out in tx["vout"]:
-                    # Add to our total balance
+    #                 # Remove this coin from our wallet state utxo pool
+    #                 # so we don't double spend it later
 
-                    # Keep track of this UTXO by its outpoint in case we spend it later
+    #         # Check every tx output for our own witness programs.
+    #         # These are coins we have received.
+    #         for out in tx["vout"]:
+    #                 # Add to our total balance
+
+    #                 # Keep track of this UTXO by its outpoint in case we spend it later
 
     return state
 

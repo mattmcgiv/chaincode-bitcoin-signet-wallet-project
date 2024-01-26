@@ -10,7 +10,6 @@ def base58_decode_and_remove_checksum(base58check_string: str) -> bytes:
 def base58_decode(base58_string: str) -> bytes:
     # Convert Base58 string to a big integer
     big_integer = convert_base_58_string_to_integer(base58_string)
-    print(big_integer)
 
     # Convert the integer to bytes
     converted_bytes = big_integer.to_bytes(

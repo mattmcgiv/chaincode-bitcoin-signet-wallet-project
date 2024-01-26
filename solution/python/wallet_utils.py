@@ -1,3 +1,5 @@
+import hashlib
+from Crypto.Hash import SHA256, RIPEMD160
 def parse_derivation_path(derivation_path):
     # Split the path by '/'
     path_parts = derivation_path.split("/")
@@ -24,3 +26,12 @@ def parse_derivation_path(derivation_path):
         result.append((index, hardened))
 
     return result
+
+def hash160(data):
+    sha256 = hashlib.sha256(data).digest()
+
+    # TODO: this is from a library that I may be able to remove (RIPEMD160)
+    ripemd160 = RIPEMD160.new()
+    ripemd160.update(sha256)
+
+    return ripemd160.digest()
