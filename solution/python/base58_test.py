@@ -1,5 +1,5 @@
 import unittest
-from decode_utils import base58_decode, convert_base_58_string_to_integer
+from utils import base58_decode, convert_base_58_string_to_integer
 
 
 class TestDecodeUtils(unittest.TestCase):

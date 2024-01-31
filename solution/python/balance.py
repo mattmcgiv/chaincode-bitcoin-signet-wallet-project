@@ -1,10 +1,18 @@
-from conversion_utils import parse256
-from ec_utils import point
+from utils import (
+    parse256,
+    point,
+    base58_decode_and_remove_checksum,
+    contains_our_pubkey,
+    deserialize_key,
+    derive_compressed_pubkey_from_privkey,
+    ser32,
+    ser256,
+    serP,
+    parse_derivation_path,
+    hash160,
+)
 from ecdsa import SigningKey, SECP256k1
 from decimal import Decimal
-from decode_utils import base58_decode_and_remove_checksum
-from key_utils import deserialize_key, derive_compressed_pubkey_from_privkey
-from serialization_utils import ser32, ser256, serP
 from solution_constants import (
     WALLET_DESCRIPTOR,
     WPKH,
@@ -14,10 +22,10 @@ from solution_constants import (
 )
 from subprocess import run
 from typing import List, Tuple
-from wallet_utils import parse_derivation_path, hash160
 import hashlib
 import hmac
 import json
+
 
 # Provided by administrator
 WALLET_NAME = "wallet_000"
@@ -37,13 +45,16 @@ def derive_priv_child(
 
     # hardened child
     if hardened:
+        hardened_bytes = 0x80000001.to_bytes(4, byteorder="big")
+        index_bytes = index.to_bytes(4, byteorder="big")
+        hardened_index = hardened_bytes + index_bytes
         # let I = HMAC-SHA512(Key = cpar, Data = 0x00 || ser256(kpar) || ser32(i)).
         # (Note: The 0x00 pads the private key to make it 33 bytes long.)
         # ser256(p): serializes the integer p as a 32-byte sequence, most significant byte first.
         # ser32(i): serialize a 32-bit unsigned integer i as a 4-byte sequence, most significant byte first.
         I = hmac.new(
             chaincode,
-            b"\x00" + key + index.to_bytes(4, byteorder="big"),
+            b"\x00" + key + hardened_index,
             hashlib.sha512,
         ).digest()
 
@@ -185,25 +196,39 @@ def recover_wallet_state(xprv: str):
     #     json.dump(state, f, indent=4)
     #     f.close()
 
-    # # Scan blocks 0-310
-    # height = 310
-    # for h in range(height + 1):
+    # Scan blocks 0-310
+    height = 310
+    for h in range(height + 1):
+        # Get the transactions in the block with height h
+        block_hash = bcli("getblockhash " + str(h))
+        block = bcli("getblock " + block_hash + " 2")
+        block_json = json.loads(block)
+        txs = block_json["tx"]
 
-    #     # Scan every tx in every block
-    #     for tx in txs:
-    #         # Check every tx input (witness) for our own compressed public keys.
-    #         # These are coins we have spent.
-    #         for inp in tx["vin"]:
+        # Scan every tx in every block
+        for tx in txs:
+            for inp in tx["vin"]:
+                # Check every tx input (witness) for our own compressed public keys.
+                # These are coins we have spent.
 
-    #                 # Remove this coin from our wallet state utxo pool
-    #                 # so we don't double spend it later
+                if "coinbase" in inp:
+                    continue
 
-    #         # Check every tx output for our own witness programs.
-    #         # These are coins we have received.
-    #         for out in tx["vout"]:
-    #                 # Add to our total balance
+                # if inp doesn't have a txinwitness key, skip it
+                if "txinwitness" not in inp:
+                    continue
 
-    #                 # Keep track of this UTXO by its outpoint in case we spend it later
+                if contains_our_pubkey(inp["txinwitness"], state["pubs"]):
+                    # Remove this coin from our wallet state utxo pool
+                    # so we don't double spend it later
+                    state["utxo"]
+
+            # Check every tx output for our own witness programs.
+            # These are coins we have received.
+            for out in tx["vout"]:
+                # Add to our total balance
+                print(".")
+                # Keep track of this UTXO by its outpoint in case we spend it later
 
     return state
 
