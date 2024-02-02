@@ -1,4 +1,3 @@
-# TODO: wallet descriptor should be parsed, not hard-coded
 DERIVATION_PATH = "84h/1h/0h/0/*"
 TPRV = "tprv8ZgxMBicQKsPdL9HoopTVCQ6VjpzpEPZmGoJeBtw3BUjfQATEJvTNACXjy6x9uZLjgsVvHXWkTPiRQMqmEb5BFciXVDwzt79nbBi9dXVxwA"
 WALLET_DESCRIPTOR = "wpkh(tprv8ZgxMBicQKsPdL9HoopTVCQ6VjpzpEPZmGoJeBtw3BUjfQATEJvTNACXjy6x9uZLjgsVvHXWkTPiRQMqmEb5BFciXVDwzt79nbBi9dXVxwA/84h/1h/0h/0/*)#6kh6r3d8"

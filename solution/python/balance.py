@@ -45,16 +45,12 @@ def derive_priv_child(
 
     # hardened child
     if hardened:
-        hardened_bytes = 0x80000001.to_bytes(4, byteorder="big")
-        index_bytes = index.to_bytes(4, byteorder="big")
-        hardened_index = hardened_bytes + index_bytes
-        # let I = HMAC-SHA512(Key = cpar, Data = 0x00 || ser256(kpar) || ser32(i)).
-        # (Note: The 0x00 pads the private key to make it 33 bytes long.)
-        # ser256(p): serializes the integer p as a 32-byte sequence, most significant byte first.
-        # ser32(i): serialize a 32-bit unsigned integer i as a 4-byte sequence, most significant byte first.
+        # Correct way to calculate the index for a hardened child
+        index_bytes = (index + 0x80000000).to_bytes(4, byteorder="big")
+        # HMAC-SHA512(Key = chaincode, Data = 0x00 || ser256(kpar) || ser32(i))
         I = hmac.new(
             chaincode,
-            b"\x00" + key + hardened_index,
+            b"\x00" + key + index_bytes,
             hashlib.sha512,
         ).digest()
 
@@ -65,7 +61,7 @@ def derive_priv_child(
         # serP(P): serializes the coordinate pair P = (x,y) as a byte sequence using SEC1's compressed form: (0x02 or 0x03) || ser256(x), where the header byte depends on the parity of the omitted y coordinate.
         # point(p): returns the coordinate pair resulting from EC point multiplication (repeated application of the EC group operation) of the secp256k1 base point with the integer p.
         I = hmac.new(
-            chaincode, (serP(point(key)) + ser32(index)), digestmod=hashlib.sha256
+            chaincode, (serP(point(key)) + ser32(index)), digestmod=hashlib.sha512
         ).digest()
 
     # Split I into two 32-byte sequences, IL and IR.
@@ -93,6 +89,7 @@ def get_wallet_privs(
 ) -> List[bytes]:
     privs = []
 
+    print("key", key)
     # Check if both key and chaincode are bytes
     if not isinstance(key, bytes):
         raise TypeError("key must be bytes.")
@@ -102,22 +99,29 @@ def get_wallet_privs(
 
     current_key = key
     current_chaincode = chaincode
+    is_hardened_index = False
+
     for i in range(len(path)):
+        print("path[i]", path[i])
         if not isinstance(path[i][0], int):
             raise TypeError("index must be int.")
 
         if not isinstance(path[i][1], bool):
             raise TypeError("hardened must be bool.")
 
+        is_hardened_index = path[i][1]
         priv_child = derive_priv_child(
-            current_key, current_chaincode, path[i][0], path[i][1]
+            current_key, current_chaincode, path[i][0], is_hardened_index
         )
         current_key = priv_child["key"]
         current_chaincode = priv_child["chaincode"]
 
-    # use key_4 to derive 2000 keys and append them to privs
+    print("is_hardened_index", is_hardened_index)
     for i in range(2000):
-        derived_priv_child = derive_priv_child(current_key, current_key, i, False)
+
+        derived_priv_child = derive_priv_child(
+            current_key, current_chaincode, i, is_hardened_index
+        )
         privs.append(derived_priv_child["key"])
 
     return privs
@@ -171,6 +175,7 @@ def recover_wallet_state(xprv: str):
         decoded_key,
         decoded_chaincode,
         parse_derivation_path(DERIVATION_PATH),
+        index=2000,
     )
     # get the public keys from the privs
     pubs = []

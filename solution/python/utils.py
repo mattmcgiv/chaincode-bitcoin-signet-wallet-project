@@ -26,9 +26,11 @@ def compress_public_key(public_key):
 
 def contains_our_pubkey(txinwitness, public_keys):
     for pubkey in public_keys:
-        bytes_from_txinwitness_hex = bytes.fromhex(txinwitness[1])
-        print(pubkey, bytes_from_txinwitness_hex)
-        if pubkey == bytes_from_txinwitness_hex:
+        # convert pubkey to hex from bytes
+        pubkey = pubkey.hex()
+        txinwitness_pubkey_hex = txinwitness[0]
+        # print(pubkey, txinwitness_pubkey_hex)
+        if pubkey == txinwitness_pubkey_hex:
             return True
     return False
 
@@ -54,7 +56,7 @@ def deserialize_key(b: bytes) -> object:
         "chaincode": b[13:45],
         "key": b[45:78],
     }
-    print("deserialized_key", deserialized_key)
+    # print("deserialized_key", deserialized_key)
     return deserialized_key
 
 
@@ -72,13 +74,22 @@ def hash160(data):
     return ripemd160.digest()
 
 
+# parse256(p): interprets a 32-byte sequence as a 256-bit number, most significant byte first.
+def parse256(byte_sequence):
+    if len(byte_sequence) != 32:
+        raise ValueError("Byte sequence must be exactly 32 bytes long")
+    return int.from_bytes(byte_sequence, byteorder="big")
+
+
 def parse_derivation_path(derivation_path):
     path_parts = derivation_path.split("/")
     result = []
     for part in path_parts:
         if part == "*":
             continue
-        if part.endswith("h"):
+        if part == "m":
+            continue
+        if part.endswith("h") or part.endswith("H"):
             index = int(part[:-1])
             hardened = True
         else:
