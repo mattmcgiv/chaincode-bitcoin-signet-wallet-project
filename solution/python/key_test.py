@@ -1,9 +1,15 @@
 from ast import parse
+from itertools import chain
 import unittest
 from balance import derive_priv_child, get_wallet_privs, parse_derivation_path
 from utils import derive_compressed_pubkey_from_privkey, deserialize_key
 from utils import base58_decode_and_remove_checksum, base58_decode, hash160
-from solution_constants import DERIVATION_PATH, EXTENDED_KEY_VERSION_BYTES, TV_1
+from solution_constants import (
+    DERIVATION_PATH,
+    EXTENDED_KEY_VERSION_BYTES,
+    EXTENDED_PRIVATE_KEY,
+    TV_1,
+)
 from bip32 import BIP32, HARDENED_INDEX
 from base58 import b58encode
 import hashlib
@@ -111,20 +117,19 @@ class TestKeyUtils(unittest.TestCase):
 
         # bip32 known good reference
         bip32 = BIP32.from_xpriv(parent_xpriv)
-        bip32_deriv_path = "m/0/0"
+        bip32_deriv_path = "m/0"
         descendant_xpriv = bip32.get_xpriv_from_path(bip32_deriv_path)
 
         print("descendant_xpriv", descendant_xpriv)
 
-        # # convert descendant xpriv from bytes to string
-        # descendant_xpriv = descendant_xpriv[1].decode("utf-8")
-
         bip32 = BIP32.from_xpriv(descendant_xpriv)
         bip32_privs = []
+        bip32_pubs = []
 
         for i in range(2000):
-            deriv_path = "m/0/" + str(i)
+            deriv_path = "m/" + str(i)
             bip32_privs.append(bip32.get_privkey_from_path(deriv_path))
+            bip32_pubs.append(bip32.get_pubkey_from_path(deriv_path))
 
         # this library (my stuff)
         decoded = base58_decode_and_remove_checksum(parent_xpriv)
@@ -139,7 +144,84 @@ class TestKeyUtils(unittest.TestCase):
 
         for i in range(2000):
             print("testing key", i, "...")
+            print("bip32_pubs", bip32_pubs[i].hex())
             self.assertEqual(bip32_privs[i].hex(), privs[i].hex())
+
+    def test_get_wallet_privs_hardened(self):
+        parent_xpriv = "xprv9s21ZrQH143K3QTDL4LXw2F7HEK3wJUD2nW2nRk4stbPy6cq3jPPqjiChkVvvNKmPGJxWUtg6LnF5kejMRNNU3TGtRBeJgk33yuGBxrMPHi"
+
+        # bip32 known good reference
+        bip32 = BIP32.from_xpriv(parent_xpriv)
+        bip32_deriv_path = "m/0H"
+        descendant_xpriv = bip32.get_xpriv_from_path(bip32_deriv_path)
+
+        print("descendant_xpriv", descendant_xpriv)
+
+        bip32 = BIP32.from_xpriv(descendant_xpriv)
+        bip32_privs = []
+        bip32_pubs = []
+
+        for i in range(2000):
+            deriv_path = "m/" + str(i) + "H"
+            bip32_privs.append(bip32.get_privkey_from_path(deriv_path))
+            bip32_pubs.append(bip32.get_pubkey_from_path(deriv_path))
+
+        # this library (my stuff)
+        decoded = base58_decode_and_remove_checksum(parent_xpriv)
+        deserialized = deserialize_key(decoded)
+
+        privkey = deserialized["key"][1:]
+        chaincode = deserialized["chaincode"]
+
+        privs = get_wallet_privs(
+            privkey, chaincode, parse_derivation_path(bip32_deriv_path)
+        )
+
+        for i in range(2000):
+            print("testing key", i, "...")
+            print("bip32_pubs", bip32_pubs[i].hex())
+            self.assertEqual(bip32_privs[i].hex(), privs[i].hex())
+
+    def test_get_wallet_privs_for_my_xpriv(self):
+        parent_xpriv = EXTENDED_PRIVATE_KEY
+
+        # bip32 known good reference
+        bip32 = BIP32.from_xpriv(parent_xpriv)
+        bip32_deriv_path = DERIVATION_PATH
+        descendant_xpriv = bip32.get_xpriv_from_path(bip32_deriv_path)
+
+        print("my descendant_xpriv", descendant_xpriv)
+
+        bip32 = BIP32.from_xpriv(descendant_xpriv)
+        bip32_privs = []
+        bip32_pubs = []
+
+        for i in range(2000):
+            deriv_path = "m/" + str(i)
+            bip32_privs.append(bip32.get_privkey_from_path(deriv_path))
+            bip32_pubs.append(bip32.get_pubkey_from_path(deriv_path))
+
+        # this library (my stuff)
+        decoded = base58_decode_and_remove_checksum(parent_xpriv)
+        deserialized = deserialize_key(decoded)
+
+        privkey = deserialized["key"][1:]
+        chaincode = deserialized["chaincode"]
+
+        privs = get_wallet_privs(
+            privkey, chaincode, parse_derivation_path(bip32_deriv_path)
+        )
+
+        pubs = []
+
+        for priv in privs:
+            pubs.append(derive_compressed_pubkey_from_privkey(priv))
+
+        for i in range(2000):
+            print("testing key", i, "...")
+            print("bip32_pubs", bip32_pubs[i].hex())
+            self.assertEqual(bip32_privs[i].hex(), privs[i].hex())
+            self.assertEqual(bip32_pubs[i].hex(), pubs[i].hex())
 
     def test_parse_derivation_path(self):
         expected = [(0, False)]
@@ -179,10 +261,6 @@ class TestKeyUtils(unittest.TestCase):
         compressed_pubkey_given = deserialized_public_key_given["key"]
 
         self.assertEqual(compressed_pubkey_calculated, compressed_pubkey_given)
-
-
-# TODO tests for my extended private key (see TESTNET_PRIVATE in solution_constants)
-
 
 def hex_to_bytes(hex_string):
     """

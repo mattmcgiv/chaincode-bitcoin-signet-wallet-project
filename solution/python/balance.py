@@ -28,7 +28,7 @@ import json
 
 
 # Provided by administrator
-WALLET_NAME = "wallet_000"
+WALLET_NAME = "wallet_019"
 
 
 # Perform a BIP32 parent private key -> child private key operation
@@ -118,7 +118,6 @@ def get_wallet_privs(
 
     print("is_hardened_index", is_hardened_index)
     for i in range(2000):
-
         derived_priv_child = derive_priv_child(
             current_key, current_chaincode, i, is_hardened_index
         )
@@ -158,30 +157,33 @@ def bcli(cmd: str):
 # - Request blocks 0-310 from Bitcoin Core via RPC and scan all transactions
 # - Return a state object with all the derived keys and total wallet balance
 def recover_wallet_state(xprv: str):
-    # Generate all the keypairs and witness programs to search foraa
-    deserialized_key = deserialize_key(xprv)
+    decoded_key = base58_decode_and_remove_checksum(xprv)
+    deserialized_key = deserialize_key(decoded_key)
 
-    decoded_key = base58_decode_and_remove_checksum(deserialized_key["key"])
-    decoded_chaincode = base58_decode_and_remove_checksum(deserialized_key["chaincode"])
+    privkey = deserialized_key["key"][1:]
+    chaincode = deserialized_key["chaincode"]
 
     # Check if both key and chaincode are bytes
-    if not isinstance(decoded_key, bytes):
+    if not isinstance(privkey, bytes):
         raise TypeError("key must be bytes.")
 
-    if not isinstance(decoded_chaincode, bytes):
+    if not isinstance(chaincode, bytes):
         raise TypeError("chaincode must be bytes.")
 
     privs = get_wallet_privs(
-        decoded_key,
-        decoded_chaincode,
+        privkey,
+        chaincode,
         parse_derivation_path(DERIVATION_PATH),
-        index=2000,
     )
+
     # get the public keys from the privs
     pubs = []
+    print("privs", privs)
     for priv in privs:
+        print(priv)
         pubs.append(derive_compressed_pubkey_from_privkey(priv))
 
+    print("pubs", pubs)
     # get the witness programs from the pubs
     programs = []
     for pub in pubs:
@@ -215,9 +217,6 @@ def recover_wallet_state(xprv: str):
             for inp in tx["vin"]:
                 # Check every tx input (witness) for our own compressed public keys.
                 # These are coins we have spent.
-
-                if "coinbase" in inp:
-                    continue
 
                 # if inp doesn't have a txinwitness key, skip it
                 if "txinwitness" not in inp:

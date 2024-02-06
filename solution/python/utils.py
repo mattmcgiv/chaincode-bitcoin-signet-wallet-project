@@ -1,7 +1,9 @@
+import binascii
 import hashlib
 import struct
 from Crypto.Hash import SHA256, RIPEMD160
 from ecdsa import SigningKey, SECP256k1
+from bip32 import BIP32, HARDENED_INDEX
 
 
 def base58_decode_and_remove_checksum(base58check_string: str) -> bytes:
@@ -17,21 +19,42 @@ def base58_decode(base58_string: str) -> bytes:
     return converted_bytes
 
 
+# def compress_public_key(public_key):
+#     x = public_key.pubkey.point.x()
+#     y = public_key.pubkey.point.y()
+#     prefix = 0x02 if y % 2 == 0 else 0x03
+#     return bytes([prefix]) + x.to_bytes(32, "big")
+
+
 def compress_public_key(public_key):
+    """
+    Compress a given ECDSA public key using the SECP256k1 curve.
+
+    Args:
+    public_key (VerifyingKey): The ECDSA public key to compress.
+
+    Returns:
+    str: The compressed public key as a hexadecimal string.
+    """
     x = public_key.pubkey.point.x()
     y = public_key.pubkey.point.y()
-    prefix = 0x02 if y % 2 == 0 else 0x03
-    return bytes([prefix]) + x.to_bytes(32, "big")
+    prefix = b"\x02" if y % 2 == 0 else b"\x03"
+    # return binascii.hexlify(v).decode("utf-8")
+    return prefix + x.to_bytes(32, byteorder="big")
 
-
+# check txinwitness of a P2WPKH transaction against a list of our wallet's public keys
 def contains_our_pubkey(txinwitness, public_keys):
-    for pubkey in public_keys:
-        # convert pubkey to hex from bytes
-        pubkey = pubkey.hex()
-        txinwitness_pubkey_hex = txinwitness[0]
-        # print(pubkey, txinwitness_pubkey_hex)
-        if pubkey == txinwitness_pubkey_hex:
-            return True
+    if len(txinwitness) < 2:
+        return False  # Not a valid txinwitness array for P2WPKH
+    public_keys_hex = [pubkey.hex() for pubkey in public_keys]
+
+    for pubkey_hex in public_keys_hex:
+        print(pubkey_hex, txinwitness[1])
+        if pubkey_hex == txinwitness[1]:
+            raise Exception("Found our pubkey in txinwitness")
+            # return True  # Found our pubkey in txinwitness
+        # else:
+        # raise Exception("Pubkey not found in txinwitness")
     return False
 
 
@@ -60,7 +83,23 @@ def deserialize_key(b: bytes) -> object:
     return deserialized_key
 
 
+# def derive_compressed_pubkey_from_privkey(private_key_bytes):
+#     signing_key = SigningKey.from_string(private_key_bytes, curve=SECP256k1)
+#     public_key = signing_key.verifying_key
+#     compressed_pubkey = compress_public_key(public_key)
+#     return compressed_pubkey
+
+
 def derive_compressed_pubkey_from_privkey(private_key_bytes):
+    """
+    Derive a compressed public key from a private key using the SECP256k1 curve.
+
+    Args:
+    private_key_bytes (bytes): The private key as bytes.
+
+    Returns:
+    str: The compressed public key as a hexadecimal string.
+    """
     signing_key = SigningKey.from_string(private_key_bytes, curve=SECP256k1)
     public_key = signing_key.verifying_key
     compressed_pubkey = compress_public_key(public_key)
