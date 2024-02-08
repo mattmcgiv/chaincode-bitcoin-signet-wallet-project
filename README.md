@@ -33,6 +33,8 @@ private key like this example:
 
 `wallet_000: wpkh(tprv8ZgxMBicQKsPekvUvQEdWuFnTazwP6QwU15RJCTAEUaUn9ti3NEtywCywj1PF4G2MzvTad4F3MSSZvT2nZuxHBJ9HaZad5r1dYJtzYsR9iW/84h/1h/0h/0/*)#3ajpxxju`
 
+`wallet_019: wpkh(tprv8ZgxMBicQKsPdL9HoopTVCQ6VjpzpEPZmGoJeBtw3BUjfQATEJvTNACXjy6x9uZLjgsVvHXWkTPiRQMqmEb5BFciXVDwzt79nbBi9dXVxwA/84h/1h/0h/0/*)#6kh6r3d8`
+
 The important elements here are the extended private key (`tprv...`) and the
 derivation path (`84h/1h/0h/0/*`).
 

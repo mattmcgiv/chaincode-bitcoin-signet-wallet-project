@@ -75,7 +75,6 @@ class TestKeyUtils(unittest.TestCase):
         bip32_deriv_path = "m/0"
         bip32_privkey_hex = bip32.get_privkey_from_path(bip32_deriv_path).hex()
         bip32_pubkey_hex = bip32.get_pubkey_from_path(bip32_deriv_path).hex()
-        # print("bip_32_pubkey_hex", bip32_pubkey_hex)
 
         # this library (my stuff)
         decoded = base58_decode_and_remove_checksum(parent_xpriv)
@@ -120,8 +119,6 @@ class TestKeyUtils(unittest.TestCase):
         bip32_deriv_path = "m/0"
         descendant_xpriv = bip32.get_xpriv_from_path(bip32_deriv_path)
 
-        print("descendant_xpriv", descendant_xpriv)
-
         bip32 = BIP32.from_xpriv(descendant_xpriv)
         bip32_privs = []
         bip32_pubs = []
@@ -143,8 +140,6 @@ class TestKeyUtils(unittest.TestCase):
         )
 
         for i in range(2000):
-            print("testing key", i, "...")
-            print("bip32_pubs", bip32_pubs[i].hex())
             self.assertEqual(bip32_privs[i].hex(), privs[i].hex())
 
     def test_get_wallet_privs_hardened(self):
@@ -154,8 +149,6 @@ class TestKeyUtils(unittest.TestCase):
         bip32 = BIP32.from_xpriv(parent_xpriv)
         bip32_deriv_path = "m/0H"
         descendant_xpriv = bip32.get_xpriv_from_path(bip32_deriv_path)
-
-        print("descendant_xpriv", descendant_xpriv)
 
         bip32 = BIP32.from_xpriv(descendant_xpriv)
         bip32_privs = []
@@ -178,8 +171,6 @@ class TestKeyUtils(unittest.TestCase):
         )
 
         for i in range(2000):
-            print("testing key", i, "...")
-            print("bip32_pubs", bip32_pubs[i].hex())
             self.assertEqual(bip32_privs[i].hex(), privs[i].hex())
 
     def test_get_wallet_privs_for_my_xpriv(self):
@@ -189,8 +180,6 @@ class TestKeyUtils(unittest.TestCase):
         bip32 = BIP32.from_xpriv(parent_xpriv)
         bip32_deriv_path = DERIVATION_PATH
         descendant_xpriv = bip32.get_xpriv_from_path(bip32_deriv_path)
-
-        print("my descendant_xpriv", descendant_xpriv)
 
         bip32 = BIP32.from_xpriv(descendant_xpriv)
         bip32_privs = []
@@ -218,8 +207,6 @@ class TestKeyUtils(unittest.TestCase):
             pubs.append(derive_compressed_pubkey_from_privkey(priv))
 
         for i in range(2000):
-            print("testing key", i, "...")
-            print("bip32_pubs", bip32_pubs[i].hex())
             self.assertEqual(bip32_privs[i].hex(), privs[i].hex())
             self.assertEqual(bip32_pubs[i].hex(), pubs[i].hex())
 
@@ -253,11 +240,9 @@ class TestKeyUtils(unittest.TestCase):
         compressed_pubkey_calculated = derive_compressed_pubkey_from_privkey(
             modified_deserialized_private_key
         )
-        # print("compressed_pubkey_actual (hex)", compressed_pubkey_calculated.hex())
 
         decoded_pubkey_given = base58_decode_and_remove_checksum(TV_1[1]["xpub"])
         deserialized_public_key_given = deserialize_key(decoded_pubkey_given)
-        # print("deserialized_public_key_given", deserialized_public_key_given)
         compressed_pubkey_given = deserialized_public_key_given["key"]
 
         self.assertEqual(compressed_pubkey_calculated, compressed_pubkey_given)
@@ -278,7 +263,6 @@ def hex_to_bytes(hex_string):
         return byte_representation
     except ValueError as e:
         # Handle potential errors in the conversion process
-        print(f"Error converting hex to bytes: {e}")
         return None
 
 

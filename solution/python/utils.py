@@ -19,11 +19,19 @@ def base58_decode(base58_string: str) -> bytes:
     return converted_bytes
 
 
-# def compress_public_key(public_key):
-#     x = public_key.pubkey.point.x()
-#     y = public_key.pubkey.point.y()
-#     prefix = 0x02 if y % 2 == 0 else 0x03
-#     return bytes([prefix]) + x.to_bytes(32, "big")
+def bitcoin_to_satoshis(bitcoin_amount):
+    """
+    Convert an amount in Bitcoin to Satoshis.
+
+    Parameters:
+    - bitcoin_amount: The amount of Bitcoin to convert (float).
+
+    Returns:
+    - The equivalent amount in Satoshis (int).
+    """
+    SATOSHIS_PER_BITCOIN = 100_000_000
+    satoshis = bitcoin_amount * SATOSHIS_PER_BITCOIN
+    return int(satoshis)
 
 
 def compress_public_key(public_key):
@@ -49,13 +57,22 @@ def contains_our_pubkey(txinwitness, public_keys):
     public_keys_hex = [pubkey.hex() for pubkey in public_keys]
 
     for pubkey_hex in public_keys_hex:
-        print(pubkey_hex, txinwitness[1])
         if pubkey_hex == txinwitness[1]:
-            raise Exception("Found our pubkey in txinwitness")
-            # return True  # Found our pubkey in txinwitness
-        # else:
-        # raise Exception("Pubkey not found in txinwitness")
+            return True
     return False
+
+
+# check if a P2WPKH tx contains our witness program
+def contains_our_witness_program(witness_programs, output):
+    # raise NotImplementedError()
+    witness_programs_hex = [
+        witness_program.hex() for witness_program in witness_programs
+    ]
+    if output["scriptPubKey"]["hex"] in witness_programs_hex:
+        return True
+    else:
+        return False
+        # raise NotImplementedError("This should happen a lot")
 
 
 def convert_base_58_string_to_integer(base_58_string):
@@ -79,15 +96,7 @@ def deserialize_key(b: bytes) -> object:
         "chaincode": b[13:45],
         "key": b[45:78],
     }
-    # print("deserialized_key", deserialized_key)
     return deserialized_key
-
-
-# def derive_compressed_pubkey_from_privkey(private_key_bytes):
-#     signing_key = SigningKey.from_string(private_key_bytes, curve=SECP256k1)
-#     public_key = signing_key.verifying_key
-#     compressed_pubkey = compress_public_key(public_key)
-#     return compressed_pubkey
 
 
 def derive_compressed_pubkey_from_privkey(private_key_bytes):

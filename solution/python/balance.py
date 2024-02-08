@@ -1,4 +1,7 @@
+from utxo_set import UTXOSet
 from utils import (
+    bitcoin_to_satoshis,
+    contains_our_witness_program,
     parse256,
     point,
     base58_decode_and_remove_checksum,
@@ -89,7 +92,6 @@ def get_wallet_privs(
 ) -> List[bytes]:
     privs = []
 
-    print("key", key)
     # Check if both key and chaincode are bytes
     if not isinstance(key, bytes):
         raise TypeError("key must be bytes.")
@@ -102,7 +104,6 @@ def get_wallet_privs(
     is_hardened_index = False
 
     for i in range(len(path)):
-        print("path[i]", path[i])
         if not isinstance(path[i][0], int):
             raise TypeError("index must be int.")
 
@@ -116,7 +117,6 @@ def get_wallet_privs(
         current_key = priv_child["key"]
         current_chaincode = priv_child["chaincode"]
 
-    print("is_hardened_index", is_hardened_index)
     for i in range(2000):
         derived_priv_child = derive_priv_child(
             current_key, current_chaincode, i, is_hardened_index
@@ -178,12 +178,9 @@ def recover_wallet_state(xprv: str):
 
     # get the public keys from the privs
     pubs = []
-    print("privs", privs)
     for priv in privs:
-        print(priv)
         pubs.append(derive_compressed_pubkey_from_privkey(priv))
 
-    print("pubs", pubs)
     # get the witness programs from the pubs
     programs = []
     for pub in pubs:
@@ -191,17 +188,12 @@ def recover_wallet_state(xprv: str):
 
     # Prepare a wallet state data structure
     state = {
-        "utxo": {},
+        "utxo": UTXOSet(),
         "balance": 0,
         "privs": privs,
         "pubs": pubs,
         "programs": programs,
     }
-
-    # pretty print state to a file
-    # with open("state.json", "w") as f:
-    #     json.dump(state, f, indent=4)
-    #     f.close()
 
     # Scan blocks 0-310
     height = 310
@@ -214,6 +206,15 @@ def recover_wallet_state(xprv: str):
 
         # Scan every tx in every block
         for tx in txs:
+            # Check every tx output for our own witness programs.
+            # These are coins we have received.
+            for out in tx["vout"]:
+                if contains_our_witness_program(programs, out):
+                    # Add to our total balance
+                    satoshis = bitcoin_to_satoshis(out["value"])
+                    state["balance"] += satoshis
+                    # Keep track of this UTXO by its outpoint in case we spend it later
+                    state["utxo"].add_utxo(tx["txid"], out["value"])
             for inp in tx["vin"]:
                 # Check every tx input (witness) for our own compressed public keys.
                 # These are coins we have spent.
@@ -223,19 +224,16 @@ def recover_wallet_state(xprv: str):
                     continue
 
                 if contains_our_pubkey(inp["txinwitness"], state["pubs"]):
-                    # Remove this coin from our wallet state utxo pool
+                    # Remove this utxo from our wallet state utxo pool
                     # so we don't double spend it later
-                    state["utxo"]
-
-            # Check every tx output for our own witness programs.
-            # These are coins we have received.
-            for out in tx["vout"]:
-                # Add to our total balance
-                print(".")
-                # Keep track of this UTXO by its outpoint in case we spend it later
+                    satoshis = bitcoin_to_satoshis(state["utxo"].get_utxo(inp["txid"]))
+                    state["balance"] -= satoshis
+                    state["utxo"].remove_utxo(inp["txid"])
 
     return state
 
 
 if __name__ == "__main__":
-    print(f"{WALLET_NAME} {recover_wallet_state(EXTENDED_PRIVATE_KEY)['balance']}")
+    print(
+        f"{WALLET_NAME} {recover_wallet_state(EXTENDED_PRIVATE_KEY)['balance']/100_000_000}"
+    )
