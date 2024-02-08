@@ -1,5 +1,6 @@
 # PYTHON
 pip install ecdsa
+pip install pycryptodome
 python ./solution/python/balance.py
 
 # RUST
