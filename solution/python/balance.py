@@ -229,11 +229,10 @@ def recover_wallet_state(xprv: str):
                     )
                     state["balance"] -= satoshis
                     state["utxo"].remove_utxo(inp["txid"], inp["vout"])
-
     return state
 
 
 if __name__ == "__main__":
     print(
-        f"{WALLET_NAME} {recover_wallet_state(EXTENDED_PRIVATE_KEY)['balance']/100_000_000}"
+        f"{WALLET_NAME} {recover_wallet_state(EXTENDED_PRIVATE_KEY)['utxo'].sum_total_value_of_utxo_set()}"
     )

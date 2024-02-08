@@ -47,3 +47,12 @@ class UTXOSet:
         for txid in self.utxo_set:
             self.utxo_set[txid].sort(key=lambda x: x[0])
         return self.utxo_set
+
+    def sum_total_value_of_utxo_set(self):
+        """Sums the total value of the UTXO set."""
+        total_value = 0
+        for txid in self.utxo_set:
+            for utxo in self.utxo_set[txid]:
+                total_value += utxo[1]
+        # return the total value but rounded to 8 decimal places
+        return round(total_value, 8)
