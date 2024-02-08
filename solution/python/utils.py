@@ -3,7 +3,6 @@ import hashlib
 import struct
 from Crypto.Hash import SHA256, RIPEMD160
 from ecdsa import SigningKey, SECP256k1
-from bip32 import BIP32, HARDENED_INDEX
 
 
 def base58_decode_and_remove_checksum(base58check_string: str) -> bytes:
