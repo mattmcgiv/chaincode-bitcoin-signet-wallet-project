@@ -266,21 +266,5 @@ def hex_to_bytes(hex_string):
         return None
 
 
-def hex_to_wif(hex_priv_key):
-    # Add the 0x80 prefix for mainnet private keys
-    prefixed_key = "80" + hex_priv_key
-
-    # Calculate the checksum
-    first_sha256 = hashlib.sha256(bytes.fromhex(prefixed_key)).digest()
-    second_sha256 = hashlib.sha256(first_sha256).digest()
-    checksum = second_sha256[:4]
-
-    # Create the final byte string and Base58 encode
-    final_key = bytes.fromhex(prefixed_key) + checksum
-    wif_key = base58.b58encode(final_key).decode("utf-8")
-
-    return wif_key
-
-
 if __name__ == "__main__":
     unittest.main()
