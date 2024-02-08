@@ -17,9 +17,6 @@ from utils import (
 from ecdsa import SigningKey, SECP256k1
 from decimal import Decimal
 from solution_constants import (
-    WALLET_DESCRIPTOR,
-    WPKH,
-    TPRV,
     DERIVATION_PATH,
     EXTENDED_PRIVATE_KEY,
 )
@@ -206,6 +203,7 @@ def recover_wallet_state(xprv: str):
 
         # Scan every tx in every block
         for tx in txs:
+            satoshis = 0
             # Check every tx output for our own witness programs.
             # These are coins we have received.
             for out in tx["vout"]:
@@ -214,7 +212,7 @@ def recover_wallet_state(xprv: str):
                     satoshis = bitcoin_to_satoshis(out["value"])
                     state["balance"] += satoshis
                     # Keep track of this UTXO by its outpoint in case we spend it later
-                    state["utxo"].add_utxo(tx["txid"], out["value"])
+                    state["utxo"].add_utxo(tx["txid"], out["n"], out["value"])
             for inp in tx["vin"]:
                 # Check every tx input (witness) for our own compressed public keys.
                 # These are coins we have spent.
@@ -226,9 +224,11 @@ def recover_wallet_state(xprv: str):
                 if contains_our_pubkey(inp["txinwitness"], state["pubs"]):
                     # Remove this utxo from our wallet state utxo pool
                     # so we don't double spend it later
-                    satoshis = bitcoin_to_satoshis(state["utxo"].get_utxo(inp["txid"]))
+                    satoshis = bitcoin_to_satoshis(
+                        state["utxo"].get_utxo(inp["txid"], inp["vout"])[1]
+                    )
                     state["balance"] -= satoshis
-                    state["utxo"].remove_utxo(inp["txid"])
+                    state["utxo"].remove_utxo(inp["txid"], inp["vout"])
 
     return state
 
