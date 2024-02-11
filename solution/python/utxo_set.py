@@ -1,3 +1,5 @@
+import json
+
 class UTXOSet:
     def __init__(self):
         self.utxo_set = {}  # Initialize the UTXO set as an empty dictionary
@@ -56,3 +58,20 @@ class UTXOSet:
                 total_value += utxo[1]
         # return the total value but rounded to 8 decimal places
         return round(total_value, 8)
+
+    def to_json(self):
+        result = []
+        for utxo in self.utxo_set:
+            for output_num, amount in self.utxo_set[utxo]:
+                result.append(
+                    {"txid": utxo, "output_num": output_num, "amount": amount}
+                )
+        return result
+
+
+class UTXOSetEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, UTXOSet):
+            # Define how to serialize the UTXOSet object here
+            return obj.to_json()
+        return super().default(obj)

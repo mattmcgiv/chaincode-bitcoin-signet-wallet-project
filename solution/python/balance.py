@@ -1,4 +1,4 @@
-from utxo_set import UTXOSet
+from utxo_set import UTXOSet, UTXOSetEncoder
 from utils import (
     bitcoin_to_satoshis,
     contains_our_witness_program,
@@ -229,10 +229,28 @@ def recover_wallet_state(xprv: str):
                     )
                     state["balance"] -= satoshis
                     state["utxo"].remove_utxo(inp["txid"], inp["vout"])
+
+    state["balance"] = state["utxo"].sum_total_value_of_utxo_set()
+
+    # convert utxo to json
+    state["utxo"] = state["utxo"].to_json()
+
+    # convert privs to hex
+    state["privs"] = [hex(int.from_bytes(i, byteorder="big")) for i in state["privs"]]
+
+    # convert pubs to hex
+    state["pubs"] = [hex(int.from_bytes(i, byteorder="big")) for i in state["pubs"]]
+
+    # convert programs to hex
+    state["programs"] = [
+        hex(int.from_bytes(i, byteorder="big")) for i in state["programs"]
+    ]
+
+    with open("output.json", "w") as file:
+        json.dump(state, file)
+
     return state
 
 
 if __name__ == "__main__":
-    print(
-        f"{WALLET_NAME} {recover_wallet_state(EXTENDED_PRIVATE_KEY)['utxo'].sum_total_value_of_utxo_set()}"
-    )
+    print(f"{WALLET_NAME} {recover_wallet_state(EXTENDED_PRIVATE_KEY)['balance']}")
